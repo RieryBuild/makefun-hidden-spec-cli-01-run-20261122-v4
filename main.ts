@@ -300,6 +300,9 @@ interface UHunk {
 interface USection {
   oldP: string | undefined;
   newP: string | undefined;
+  /** True once a `---`/`+++` pair has named this side (D11: rename must not overwrite it). */
+  pairOld: boolean;
+  pairNew: boolean;
   creation: boolean;
   deletion: boolean;
   hasHunk: boolean;
@@ -330,7 +333,7 @@ function parseUnifiedSections(lines: string[]): USection[] {
       const x = rest.slice(2, bi);
       const y = rest.slice(bi + 3);
       if (x === '' || y === '') throw new Exit2(`error: parse ${i + 1}`);
-      cur = { oldP: x, newP: y, creation: false, deletion: false, hasHunk: false, hunks: [] };
+      cur = { oldP: x, newP: y, pairOld: false, pairNew: false, creation: false, deletion: false, hasHunk: false, hunks: [] };
       sections.push(cur);
       i += 1;
       continue;
@@ -339,11 +342,13 @@ function parseUnifiedSections(lines: string[]): USection[] {
       const op = headerPath(line);
       const np = headerPath(lines[i + 1]!);
       if (cur === null || cur.hasHunk) {
-        cur = { oldP: op, newP: np, creation: false, deletion: false, hasHunk: false, hunks: [] };
+        cur = { oldP: op, newP: np, pairOld: true, pairNew: true, creation: false, deletion: false, hasHunk: false, hunks: [] };
         sections.push(cur);
       } else {
         cur.oldP = op;
         cur.newP = np;
+        cur.pairOld = true;
+        cur.pairNew = true;
       }
       i += 2;
       continue;
@@ -374,8 +379,8 @@ function parseUnifiedSections(lines: string[]): USection[] {
     }
     if (cur !== null && !cur.hasHunk) {
       if (line.startsWith('--- ')) throw new Exit2(`error: parse ${i + 2}`);
-      if (line.startsWith('rename from ')) cur.oldP = line.slice('rename from '.length).trim();
-      else if (line.startsWith('rename to ')) cur.newP = line.slice('rename to '.length).trim();
+      if (line.startsWith('rename from ')) { if (!cur.pairOld) cur.oldP = line.slice('rename from '.length).trim(); }
+      else if (line.startsWith('rename to ')) { if (!cur.pairNew) cur.newP = line.slice('rename to '.length).trim(); }
       else if (line === 'new file mode' || line.startsWith('new file mode ') || line.startsWith('new file mode\t')) cur.creation = true;
       else if (line === 'deleted file mode' || line.startsWith('deleted file mode ') || line.startsWith('deleted file mode\t')) cur.deletion = true;
       i += 1;
